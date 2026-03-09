@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>GuruTrade Pro | Global Master</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root { --red: #fa5151; --green: #29cc88; --bg: #f8f9fa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+        body { background: var(--bg); overflow-x: hidden; }
+        .hidden { display: none !important; }
+        header { background: linear-gradient(180deg, #ff6b6b, #ff8e8e); color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; }
+        .wallet-card { background: white; margin: 20px auto; padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 500px; }
+        .bal-val { font-size: 3rem; font-weight: 800; color: #333; margin: 15px 0; }
+        .btn { border: none; border-radius: 12px; cursor: pointer; font-weight: bold; padding: 16px; transition: 0.2s; font-size: 1rem; }
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; width: 92%; max-width: 400px; border-radius: 24px; padding: 25px; display: none; z-index: 1001; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; }
+        .active { display: block !important; }
+        .input-box { width: 100%; padding: 15px; margin-bottom: 12px; border: 1px solid #eee; border-radius: 12px; background: #fafafa; outline: none; }
+        .main-btn { width: 100%; padding: 16px; background: var(--red); color: white; border-radius: 12px; font-weight: bold; border: none; cursor: pointer; }
+        .admin-item { background: #f9f9f9; padding: 15px; border-radius: 10px; border-left: 5px solid var(--red); margin-bottom: 10px; text-align: left; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <div id="login-page" style="position:fixed; inset:0; background:white; z-index:5000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px;">
+        <h1 style="color:#ff6b6b; margin-bottom: 5px;">GuruTrade Pro</h1>
+        <p style="color:#888; margin-bottom:25px;">Connecting to Cloud Engine...</p>
+        <input type="number" id="auth-phone" class="input-box" placeholder="Enter Mobile Number">
+        <button class="main-btn" onclick="handleAuth()">LOGIN / REGISTER</button>
+    </div>
+
+    <header>
+        <div style="flex:1;"></div>
+        <div style="flex:2;">GURUTRADE PRO</div>
+        <div onclick="openM('admin-panel')" style="flex:1; display:flex; justify-content: flex-end;">
+            <div style="width:30px; height:30px; opacity:0.1; border:1px solid white; border-radius:50%; cursor:pointer;"></div>
+        </div>
+    </header>
+
+    <div class="wallet-card">
+        <p style="color:#aaa; font-weight: bold; letter-spacing: 1px;">LIVE BALANCE</p>
+        <div class="bal-val">₹ <span id="balance">0.00</span></div>
+        <div style="display:flex; gap:15px; margin-top: 10px;">
+            <button class="btn" style="background:var(--green); color:white; flex:1;" onclick="openM('dep-modal')">Deposit</button>
+            <button class="btn" style="background:#eee; flex:1;" onclick="openM('wd-modal')">Withdraw</button>
+        </div>
+    </div>
+
+    <div style="text-align:center; color:#888; font-size: 0.85rem; padding: 10px;">
+        <p>✅ Server: gurutradepro-e2326</p>
+        <p>Status: All Players Synced</p>
+    </div>
+
+    <div class="modal" id="admin-panel">
+        <h3 style="text-align:center;">Cloud Admin Control</h3>
+        <input type="password" id="admin-pin" class="input-box" placeholder="Enter PIN (151010)" style="margin-top:15px;">
+        <button class="main-btn" onclick="unlockAdmin()">UNLOCK PANEL</button>
+        <div id="admin-content" class="hidden" style="max-height: 300px; overflow-y: auto;">
+            <h4 style="margin:20px 0 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">Pending User Actions:</h4>
+            <div id="req-list"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="dep-modal">
+        <h3>Deposit Funds</h3>
+        <p style="font-size:0.85rem; margin:10px 0; color: #666;">Transfer to UPI: <b>aaravvarun@fam</b></p>
+        <input type="number" id="d-amt" class="input-box" placeholder="Amount (₹)">
+        <input type="text" id="d-utr" class="input-box" placeholder="UTR / Transaction ID">
+        <button class="main-btn" onclick="sendReq('Deposit')">SUBMIT TO ADMIN</button>
+    </div>
+
+    <div class="modal" id="wd-modal">
+        <h3>Withdraw Funds</h3>
+        <input type="number" id="w-amt" class="input-box" placeholder="Amount to Withdraw">
+        <input type="text" id="w-upi" class="input-box" placeholder="Your UPI ID">
+        <button class="main-btn" onclick="sendReq('Withdraw')">REQUEST WITHDRAWAL</button>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeAll()"></div>
+
+    <script>
+        // CONFIG FROM YOUR FIREBASE CONSOLE
+        const firebaseConfig = {
+            apiKey: "AIzaSyDFIPspCVNzNtDjsCEdt9sCEdt9",
+            authDomain: "gurutradepro-e2326.firebaseapp.com",
+            databaseURL: "https://gurutradepro-e2326-default-rtdb.firebaseio.com",
+            projectId: "gurutradepro-e2326",
+            storageBucket: "gurutradepro-e2326.appspot.com",
+            messagingSenderId: "371257016383",
+            appId: "1:371257016383:web:0f877f864551d764551d7"
+        };
+
+        // Start Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let userPhone = "";
+
+        // Handle User Login
+        function handleAuth() {
+            let p = document.getElementById('auth-phone').value;
+            if(p.length < 5) return alert("Please enter a valid mobile number.");
+            userPhone = p;
+            
+            db.ref('users/' + p).once('value', (s) => {
+                if(!s.exists()) {
+                    db.ref('users/' + p).set({ balance: 0, phone: p });
+                }
+                document.getElementById('login-page').classList.add('hidden');
+                syncData();
+            });
+        }
+
+        // Real-time Balance Sync
+        function syncData() {
+            db.ref('users/' + userPhone + '/balance').on('value', (s) => {
+                document.getElementById('balance').innerText = (s.val() || 0).toFixed(2);
+            });
+        }
+
+        // Send Deposit/Withdrawal Request
+        function sendReq(type) {
+            let amt = parseFloat(document.getElementById(type==='Deposit'?'d-amt':'w-amt').value);
+            let info = document.getElementById(type==='Deposit'?'d-utr':'w-upi').value;
+            if(!amt || amt < 10) return alert("Minimum amount is ₹10.");
+
+            db.ref('requests').push({
+                phone: userPhone,
+                type: type,
+                amount: amt,
+                info: info,
+                status: 'Pending',
+                time: Date.now()
+            });
+            alert("Request sent successfully! Please wait for Admin approval.");
+            closeAll();
+        }
+
+        // Unlock Admin Panel
+        function unlockAdmin() {
+            if(document.getElementById('admin-pin').value === "151010") {
+                document.getElementById('admin-content').classList.remove('hidden');
+                // Listen for ALL requests from ALL users
+                db.ref('requests').on('value', (snap) => {
+                    let h = "";
+                    snap.forEach(child => {
+                        let r = child.val();
+                        if(r.status === 'Pending') {
+                            h += `<div class="admin-item">
+                                <b>User: ${r.phone}</b> [${r.type}]<br>
+                                ₹${r.amount} | Ref: ${r.info}<br>
+                                <div style="margin-top:10px; display:flex; gap:10px;">
+                                    <button onclick="action('${child.key}', '${r.phone}', ${r.amount}, 'Approve', '${r.type}')" style="background:#29cc88; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold; flex:1;">APPROVE</button>
+                                    <button onclick="action('${child.key}', '${r.phone}', ${r.amount}, 'Reject', '${r.type}')" style="background:#fa5151; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:bold; flex:1;">REJECT</button>
+                                </div>
+                            </div>`;
+                        }
+                    });
+                    document.getElementById('req-list').innerHTML = h || "No pending requests.";
+                });
+            } else { alert("Incorrect Admin PIN."); }
+        }
+
+        // Admin Action Logic
+        function action(key, phone, amt, status, type) {
+            if(status === 'Approve' && type === 'Deposit') {
+                db.ref('users/' + phone + '/balance').transaction((curr) => (curr || 0) + amt);
+            }
+            if(status === 'Reject' && type === 'Withdraw') {
+                // Return balance if withdrawal is rejected
+                db.ref('users/' + phone + '/balance').transaction((curr) => (curr || 0) + amt);
+            }
+            db.ref('requests/' + key).update({ status: status });
+        }
+
+        function openM(id) { document.getElementById('overlay').classList.add('active'); document.getElementById(id).classList.add('active'); }
+        function closeAll() { document.querySelectorAll('.modal, .overlay').forEach(x => x.classList.remove('active')); }
+    </script>
+</body>
+</html>
